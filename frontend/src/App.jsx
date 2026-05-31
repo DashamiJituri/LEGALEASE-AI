@@ -27,7 +27,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await axios.post("http://localhost:8000/analyze", formData);
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/analyze`, formData);
       setResult(res.data);
     } catch (e) {
       setError("Analysis failed. Make sure backend is running.");
