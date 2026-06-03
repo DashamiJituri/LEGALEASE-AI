@@ -16,7 +16,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://legalease-ai-two.vercel.app"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -95,6 +95,59 @@ async def analyze_document(file: UploadFile = File(...)):
 
     result = await analyze_with_groq(text=text)
     return result
+
+
+from typing import List
+
+chat_sessions = {}
+
+@app.post("/chat")
+async def chat_with_document(request: dict):
+    session_id = request.get("session_id")
+    question = request.get("question")
+    context = request.get("context")
+    
+    messages = chat_sessions.get(session_id, [])
+    
+    prompt = f"""You are a legal document assistant. The user has uploaded a legal document with the following analysis:
+
+{context}
+
+Answer the user's question about this document clearly and concisely.
+
+User question: {question}"""
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    body = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.3
+    }
+    
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=body
+        )
+        data = response.json()
+        
+        if "choices" not in data:
+            raise Exception(f"Groq error: {data}")
+        
+        answer = data["choices"][0]["message"]["content"]
+        
+        messages.append({"role": "user", "content": question})
+        messages.append({"role": "assistant", "content": answer})
+        chat_sessions[session_id] = messages
+        
+        return {"answer": answer}
 
 @app.get("/")
 def root():
