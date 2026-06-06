@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileText, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Upload, FileText, AlertTriangle, CheckCircle, Loader2, Globe } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -31,6 +32,11 @@ const ChatBox = ({ result }) => {
     setInput("");
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
     setLoading(true);
+    if (!user) {
+  const newCount = trialCount + 1;
+  setTrialCount(newCount);
+  localStorage.setItem("trialCount", newCount.toString());
+}
     try {
       const res = await axios.post(`${API_URL}/chat`, {
         session_id: sessionId.current,
@@ -133,12 +139,27 @@ const RiskMeter = ({ score }) => {
   );
 };
 
-export default function Analyze() {
+const languages = [
+  { code: "English", label: "🇬🇧 English" },
+  { code: "Hindi", label: "🇮🇳 Hindi" },
+  { code: "Marathi", label: "🇮🇳 Marathi" },
+  { code: "Bengali", label: "🇮🇳 Bengali" },
+  { code: "Tamil", label: "🇮🇳 Tamil" },
+  { code: "French", label: "🇫🇷 French" },
+  { code: "Spanish", label: "🇪🇸 Spanish" },
+];
+
+export default function Analyze({ user }) {
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [language, setLanguage] = useState("English");
+  const [trialCount, setTrialCount] = useState(() => {
+  return parseInt(localStorage.getItem("trialCount") || "0");
+});
+const MAX_TRIAL = 5;
 
   const handleFile = (f) => {
     if (f && f.type === "application/pdf") {
@@ -149,11 +170,17 @@ export default function Analyze() {
   };
 
   const analyze = async () => {
-    if (!file) return;
-    setLoading(true); setError(null);
+  if (!file) return;
+  
+  // Trial check
+  if (!user && trialCount >= 5) {
+    setError("Free trial limit reached! Please sign up to continue.");
+    return;
+  }
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("language", language);
       const res = await axios.post(`${API_URL}/analyze`, formData);
       setResult(res.data);
     } catch (e) {
@@ -182,6 +209,38 @@ export default function Analyze() {
       </div>
 
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "48px 20px" }}>
+
+        {/* Language Selector */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: "24px", display: "flex", alignItems: "center", gap: "12px" }}>
+          <Globe size={18} color="#6366f1" />
+          <span style={{ fontSize: "14px", color: "#64748b" }}>Analysis Language:</span>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            style={{
+              background: "rgba(255,255,255,0.04)", border: "1px solid #2e2e3e",
+              borderRadius: "10px", padding: "8px 16px", color: "#fff", fontSize: "14px",
+              outline: "none", cursor: "pointer"
+            }}>
+            {languages.map(l => (
+              <option key={l.code} value={l.code} style={{ background: "#0a0a0f" }}>{l.label}</option>
+            ))}
+          </select>
+        </motion.div>
+        {/* Trial Counter */}
+{!user && (
+  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+    style={{ marginBottom: "20px", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: "12px", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <span style={{ fontSize: "14px", color: "#94a3b8" }}>
+      🎯 Free trials remaining: <strong style={{ color: "#a78bfa" }}>{5 - trialCount}</strong>/5
+    </span>
+    <Link to="/auth" style={{ fontSize: "13px", color: "#6366f1", textDecoration: "none", fontWeight: "600" }}>
+      Sign up for unlimited →
+    </Link>
+  </motion.div>
+)}
+
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -232,7 +291,7 @@ export default function Analyze() {
                 padding: "18px 60px", borderRadius: "14px", fontSize: "17px", fontWeight: "700",
                 cursor: "pointer", boxShadow: "0 8px 32px rgba(99,102,241,0.35)"
               }}>
-              ✦ Analyze Document
+              ✦ Analyze in {language}
             </motion.button>
           </motion.div>
         )}
@@ -242,7 +301,7 @@ export default function Analyze() {
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block", marginBottom: "20px" }}>
               <Loader2 size={48} color="#6366f1" />
             </motion.div>
-            <p style={{ color: "#94a3b8", fontSize: "16px" }}>AI is analyzing your document...</p>
+            <p style={{ color: "#94a3b8", fontSize: "16px" }}>AI is analyzing your document in {language}...</p>
             <p style={{ color: "#64748b", fontSize: "13px", marginTop: "8px" }}>This usually takes 10-20 seconds</p>
           </motion.div>
         )}
@@ -250,20 +309,17 @@ export default function Analyze() {
         <AnimatePresence>
           {result && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", backdropFilter: "blur(20px)" }}>
                 <RiskMeter score={result.risk_score} />
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
                 <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px", color: "#e2e8f0" }}>
-                  <FileText size={20} color="#6366f1" /> Plain English Summary
+                  <FileText size={20} color="#6366f1" /> Summary
                 </h2>
                 <p style={{ color: "#94a3b8", lineHeight: "1.8", fontSize: "15px" }}>{result.summary}</p>
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
                 <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -282,7 +338,6 @@ export default function Analyze() {
                   ))}
                 </div>
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
                 <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "20px" }}>📚 Key Legal Terms</h2>
@@ -296,7 +351,6 @@ export default function Analyze() {
                   ))}
                 </div>
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
                 <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "20px" }}>✅ Recommendations</h2>
@@ -310,7 +364,6 @@ export default function Analyze() {
                   ))}
                 </div>
               </motion.div>
-
               <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid #1e1e2e", borderRadius: "20px", padding: "32px", backdropFilter: "blur(20px)" }}>
                 <h2 style={{ fontSize: "17px", fontWeight: "700", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -318,7 +371,6 @@ export default function Analyze() {
                 </h2>
                 <ChatBox result={result} />
               </motion.div>
-
               <motion.div style={{ textAlign: "center", paddingBottom: "40px" }}>
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                   onClick={() => { setResult(null); setFile(null); }}
@@ -326,7 +378,6 @@ export default function Analyze() {
                   ↑ Analyze Another Document
                 </motion.button>
               </motion.div>
-
             </motion.div>
           )}
         </AnimatePresence>
